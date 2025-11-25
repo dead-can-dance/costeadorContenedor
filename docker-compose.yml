@@ -1,0 +1,15 @@
+services:
+  api:
+    # Construye la imagen usando el Dockerfile en el directorio actual
+    build: .
+    container_name: costeador_api_service
+    ports:
+      # Mapea el puerto 8000 de tu máquina al puerto 8000 del contenedor
+      - 8000:8000
+    volumes:
+      # Sincroniza tu carpeta local app con la carpeta /app del contenedor
+      # Esto te permite editar código en local y ver los cambios al instante (live-reload)
+      - ./app:/app
+    environment:
+      # Buena práctica: establecer la zona horaria
+      - TZ=America/Mexico_City
