@@ -1,2 +1,2 @@
-Modelo,PotenciaSalidaAC (W),Imax_CA (A),MaxVoltajeDC (V),MPPT_Min (V),MPPT_Max (V),Vff (V)
+Modelo,PotenciaSalidaAC,Imax_CA,MaxVoltajeEntradaDC,MPPT_Min,MPPT_Max,Vff
 Solis-75K,75000,90.2,1000,180,1000,480

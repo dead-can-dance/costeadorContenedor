@@ -1,5 +1,5 @@
-Calibre,Ampacidad_90C (A),Area_mm2 (para tubería),DiametroExt_mm (para charola),Impedancia_Acero (Ω/km) (para Vdrop)
+Calibre,Ampacidad_90C,Area_mm2,DiametroExt_mm,Impedancia_Acero
 6 AWG,75,13.3,7.3,1.62
 4 AWG,95,21.15,8.5,1.04
-2 AWG,130,33.62,10.1,682
-1/0 AWG,170,53.49,12.0,433
+2 AWG,130,33.62,10.1,0.682
+1/0 AWG,170,53.49,12.0,0.433

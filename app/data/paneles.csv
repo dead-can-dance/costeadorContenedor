@@ -1,2 +1,2 @@
-Modelo,Pmax (W),Vmp (V),Imp (A),Voc (V),Isc (A),CoefTempVoc (%/°C)
+Modelo,Pmax,Vmp,Imp,Voc,Isc,CoefTempVoc
 RS5J-630NBG,630,41.02,15.36,49.48,16.20,-0.24

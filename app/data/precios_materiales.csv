@@ -1,29 +1,13 @@
 SKU,Descripcion,Unidad,Costo_Unitario
-12 AWG,Cable Fotovoltaico 12 AWG (Viakon/Vinikob),metro,15.50
-10 AWG,Cable Fotovoltaico 10 AWG (Viakon/Vinikob),metro,22.80
-8 AWG,Cable Fotovoltaico 8 AWG (Viakon/Vinikob),metro,45.50
-6 AWG,Cable THW-LS 6 AWG (Vinikob),metro,65.00
-4 AWG,Cable THW-LS 4 AWG (Vinikob),metro,95.00
-2 AWG,Cable THW-LS 2 AWG (Vinikob),metro,145.00
-1/0 AWG,Cable THW-LS 1/0 AWG (Vinikob),metro,180.00
-2/0 AWG,Cable THW-LS 2/0 AWG (Vinikob),metro,220.00
-3/0 AWG,Cable THW-LS 3/0 AWG (Vinikob),metro,275.00
-4/0 AWG,Cable THW-LS 4/0 AWG (Vinikob),metro,340.00
-250 kcmil,Cable THW-LS 250 kcmil (Vinikob),metro,410.00
-15A,Interruptor Termomagnético 15A,pza,150.00
-20A,Interruptor Termomagnético 20A,pza,150.00
-30A,Interruptor Termomagnético 30A,pza,180.00
+12 AWG,Cable Fotovoltaico 12 AWG,metro,15.50
+10 AWG,Cable Fotovoltaico 10 AWG,metro,22.80
+8 AWG,Cable Fotovoltaico 8 AWG,metro,45.50
+6 AWG,Cable THW-LS 6 AWG,metro,65.00
+4 AWG,Cable THW-LS 4 AWG,metro,95.00
+2 AWG,Cable THW-LS 2 AWG,metro,145.00
+1/0 AWG,Cable THW-LS 1/0 AWG,metro,180.00
 32A,Interruptor Termomagnético DC 32A,pza,750.00
-40A,Interruptor Termomagnético 40A,pza,250.00
-50A,Interruptor Termomagnético 50A,pza,350.00
-60A,Interruptor Termomagnético 60A,pza,450.00
-100A,Interruptor Termomagnético 100A,pza,1200.00
-125A,Interruptor Termomagnético 125A,pza,2100.00
-150A,Interruptor Termomagnético 150A,pza,2800.00
-175A,Interruptor Termomagnético 175A,pza,3200.00
-200A,Interruptor Termomagnético 200A,pza,3800.00
-225A,Interruptor Termomagnético 225A,pza,4500.00
-250A,Interruptor Termomagnético 250A,pza,5200.00
+125A,Interruptor Termomagnético AC 125A,pza,2100.00
 1/2 pulgadas,Tubo Conduit Pared Delgada 1/2,metro,97.39
 3/4 pulgadas,Tubo Conduit Pared Delgada 3/4,metro,97.39
 1 pulgada,Tubo Conduit Pared Delgada 1,metro,170.79
@@ -39,7 +23,8 @@ SKU,Descripcion,Unidad,Costo_Unitario
 300 mm,Charola Tipo Malla 300mm,metro,290.00
 400 mm,Charola Tipo Malla 400mm,metro,380.00
 500 mm,Charola Tipo Malla 500mm,metro,480.00
-Tablero Principal,Paquete Interconexión Tablero Principal (Zapatas/Cableado),pza,5000.00
+600 mm,Charola Tipo Malla 600mm,metro,550.00
+Tablero Principal,Paquete Interconexión Tablero,pza,5000.00
 Transformador MT,Paquete Interconexión Media Tensión,pza,25000.00
-Acometida (Cable),Paquete Interconexión Acometida (Vampiros/Caja),pza,3500.00
-Tablero Secundario/Adecuaciones,Paquete Adecuaciones Mayores,pza,15000.00
+Acometida (Cable),Paquete Interconexión Acometida,pza,3500.00
+Tablero Secundario/Adecuaciones,Paquete Adecuaciones,pza,15000.00

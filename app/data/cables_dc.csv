@@ -1,4 +1,4 @@
-Calibre,Ampacidad_90C (A),DiametroExt_mm (para charola),Resistencia_DC (Ω/km) (para Vdrop)
+Calibre,Ampacidad_90C,DiametroExt_mm,Resistencia_DC
 12 AWG,40,6.6,6.73
-10 AWG,55,7.2,4226
-8 AWG,80,8.5,2653
+10 AWG,55,7.2,4.226
+8 AWG,80,8.5,2.653
