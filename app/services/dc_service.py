@@ -76,7 +76,10 @@ def calcular_circuito_dc(proyecto_input, alertas):
             area_total = area_pv + area_tierra
             
             # Buscar tubería
-            tuberia = next((k for k, v in TABLA_CONDUIT_IMC_40.items() if v >= area_total), '4"')
+            #tuberia = next((k for k, v in TABLA_CONDUIT_IMC_40.items() if v >= area_total), '4"')
+            
+            # CORRIGE EL ERROR DE QUE NO ENCUENTRA LA TUBERIA
+            tuberia = next((v for k, v in TABLA_CONDUIT_IMC_40.items() if k >= area_total), '4"')
             materiales_canalizacion.append({
                 "item": "Tubería Conduit IMC",
                 "especificacion": tuberia,
