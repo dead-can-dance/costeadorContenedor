@@ -1,20 +1,20 @@
-# Usa una imagen de Python 3.11 ligera
+# Dockerfile CORREGIDO
 FROM python:3.11-slim
 
-# Establece el directorio de trabajo dentro del contenedor
-WORKDIR /app
+# Establecemos una carpeta raíz genérica
+WORKDIR /code
 
-# Copia el archivo de requerimientos primero
+# Copiamos requirements e instalamos
 COPY requirements.txt .
-
-# Instala las librerías de Python
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copia el resto de tu código de la API
-COPY ./app /app
+# Copiamos TODO el proyecto (incluida la carpeta 'app') al contenedor
+COPY . .
 
-# Expone el puerto en el que correrá el API
+# Exponemos el puerto
 EXPOSE 8000
 
-# Comando para iniciar el API (usando FastAPI/Uvicorn, como recomendamos)
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Ejecutamos uvicorn apuntando a la carpeta app como módulo
+# Nota el cambio: "app.main:app" le dice a Python que busque dentro del paquete 'app'
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
