@@ -39,7 +39,24 @@ class Database:
             print(f"Error cargando bases de datos: {e}")
             # Para desarrollo, podemos crear DataFrames vacíos o mocks si fallan los archivos
             self.paneles = pd.DataFrame() 
+        
+        try:
+            # Cargar CSVs
+            self.paneles = pd.read_csv(os.path.join(DATA_DIR, 'paneles.csv')) # Quitamos set_index temporalmente para ver todo
+            
+            # --- AGREGA ESTAS 3 LÍNEAS DE DIAGNÓSTICO ---
+            print("--- DIAGNÓSTICO DE PANELES ---")
+            print("Columnas detectadas:", self.paneles.columns.tolist())
+            print(self.paneles.head(2))
+            print("--------------------------------")
+            # ---------------------------------------------
 
+            # Ahora sí aplicamos el índice
+            self.paneles = self.paneles.set_index('Modelo')
+            
+            self.inversores = pd.read_csv(os.path.join(DATA_DIR, 'inversores.csv')).set_index('Modelo')
+        finally:
+            print("Carga de paneles y inversores completada.")
     def get_panel(self, modelo):
         return self.paneles.loc[modelo]
 

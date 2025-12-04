@@ -9,7 +9,7 @@ services:
     volumes:
       # Sincroniza tu carpeta local app con la carpeta /app del contenedor
       # Esto te permite editar código en local y ver los cambios al instante (live-reload)
-      - ./app:/app
+      - ./app:/code/app
     environment:
       # Buena práctica: establecer la zona horaria
       - TZ=America/Mexico_City

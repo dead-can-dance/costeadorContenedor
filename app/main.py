@@ -41,6 +41,9 @@ async def costear_proyecto(proyecto: ProyectoInput):
         # Errores de validación técnica (ej. cable no encontrado)
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        # Errores inesperados de código
-        print(f"Error interno: {e}") # Log para ti en consola
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        import traceback
+        error_msg = traceback.format_exc()
+        print(error_msg) # Esto lo imprime en la consola de Docker
+        # Esto te devolverá el error completo en el Swagger en lugar de solo "Internal Server Error"
+        raise HTTPException(status_code=500, detail=f"Error interno detallado: {str(e)} | Trace: {error_msg}")
+    
