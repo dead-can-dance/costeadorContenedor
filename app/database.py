@@ -21,8 +21,17 @@ class Database:
             self.inversores = pd.read_csv(os.path.join(DATA_DIR, 'inversores.csv')).set_index('Modelo')
             self.cables_dc = pd.read_csv(os.path.join(DATA_DIR, 'cables_dc.csv')).set_index('Calibre')
             self.cables_ac = pd.read_csv(os.path.join(DATA_DIR, 'cables_ac.csv')).set_index('Calibre')
+            # ... dentro de load_data ...
+            self.precios_materiales = pd.read_csv(os.path.join(DATA_DIR, 'precios_materiales.csv')).set_index('SKU')
+            self.precios_mo = pd.read_csv(os.path.join(DATA_DIR, 'precios_mano_de_obra.csv')).set_index('Actividad')
+            self.precios_indirectos = pd.read_csv(os.path.join(DATA_DIR, 'precios_indirectos.csv')).set_index('Concepto')
             
-            # Cargar precios (Fase 1.D)
+            # Si usas config global:
+            #self.config_global = pd.read_csv(os.path.join(DATA_DIR, 'configuracion_global.csv')).set_index('Clave')
+            
+            
+                        # Cargar precios (Fase 1.D)
+            
             self.precios_materiales = pd.read_csv(os.path.join(DATA_DIR, 'precios_materiales.csv')).set_index('SKU')
             # ... cargar el resto de tablas de costos aquí ...
             print("Bases de datos cargadas correctamente.")

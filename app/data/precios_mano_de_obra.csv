@@ -1,0 +1,6 @@
+Actividad,Descripcion,Unidad,Costo_Unitario
+instalacion_panel,Montaje y anclaje de módulo fotovoltaico,panel,450
+instalacion_canalizacion_metro,Instalación de tubería o charola por metro lineal,metro,120
+instalacion_inversor,Montaje, conexión y configuración de inversor,5000
+gestion_permisos,Gestión de trámites ante CFE y UVIE,proyecto,12000
+viaticos_base,Viáticos básicos por día (cuadrilla),dia,2500

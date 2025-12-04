@@ -1,0 +1,6 @@
+Concepto,Descripcion,Tipo,Costo
+Gestion y Permisos,Trámites de Interconexión y Dictamen UVIE,Fijo,15000
+Ingenieria,Diseño  planos y memoria de cálculo,Fijo,8500
+Logistica,Flete y transporte de materiales (Local),Fijo,3500
+Comision Venta,Comisión para el vendedor (Factor decimal),Porcentaje,0.03
+Seguro Obra,Seguro de responsabilidad civil durante obra,Fijo,2500
