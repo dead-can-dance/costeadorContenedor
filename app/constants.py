@@ -24,7 +24,16 @@ TABLA_TIERRA_250_122 = {
 }
 
 # Tabla IMC 40% Llenado (mm2)
+# En app/constants.py
+
 TABLA_CONDUIT_IMC_40 = {
-    89: '1/2"', 151: '3/4"', 248: '1"', 425: '1 1/4"',
-    573: '1 1/2"', 937: '2"', 1323: '2 1/2"', 2046: '3"'
+    89: '1/2 pulgadas', 
+    151: '3/4 pulgadas', 
+    248: '1 pulgada', 
+    425: '1 1/4 pulgadas',
+    573: '1 1/2 pulgadas', 
+    937: '2 pulgadas', 
+    1323: '2 1/2 pulgadas', 
+    2046: '3 pulgadas',
+    3490: '4 pulgadas'
 }

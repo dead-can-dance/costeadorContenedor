@@ -118,7 +118,7 @@ def calcular_circuito_ac(proyecto_input, resultados_dc, alertas):
             
             materiales_canalizacion.append({
                 "item": "Tubo Conduit Pared Delgada", # SKU Genérico
-                "especificacion": f"{tuberia} pulgadas", # SKU Variable
+                "especificacion": tuberia, # SKU Variable
                 "cantidad": segmento.longitud,
                 "unidad": "m"
             })
