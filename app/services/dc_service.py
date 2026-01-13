@@ -2,20 +2,34 @@ import math
 from app.database import db
 from app.constants import TABLA_690_7, TABLA_TIERRA_250_122, TABLA_CONDUIT_IMC_40
 
-def calcular_circuito_dc(proyecto_input, alertas):
+def calcular_circuito_dc(proyecto_input, datos_climaticos, alertas): # <--- Nuevo argumento
     # 1. Obtener Datos
     panel = db.get_panel(proyecto_input.seleccion_componentes.modelo_panel)
     inversor = db.get_inversor(proyecto_input.seleccion_componentes.modelo_inversor)
     diseno = proyecto_input.diseno_dc
     
-    # --- MOCK CLIMA (Falta integrar API real) ---
-    # Por ahora usamos valores fijos o calculados simples
-    LTemp = 10.0 # Ejemplo
-    TempPromedio = 34.0
+    # --- USANDO DATOS REALES ---
+    # Usamos la mínima histórica para el peor caso de voltaje (Voc sube con el frío)
+    temp_min_diseno = datos_climaticos.temperatura_minima_historica
     
-    # 2. Validar Arreglos
-    # Implementar lógica Vmax/Vmin aquí...
+    # 2. Validar Voltaje Máximo (Corrección por Temperatura)
+    # Voc corregido = Voc * (1 + (Coef/100 * (Tmin - 25)))
+    coef_temp = float(panel['CoefTempVoc']) / 100.0 # Asegurar que esté en decimal
+    voc_panel = float(panel['Voc'])
     
+    delta_t = temp_min_diseno - 25.0
+    voc_corregido = voc_panel * (1 + (coef_temp * delta_t))
+    
+    voltaje_string_max = voc_corregido * diseno.paneles_por_serie
+    limit_v = float(inversor['MaxVoltajeEntradaDC'])
+    
+    if voltaje_string_max > limit_v:
+        raise ValueError(f"PELIGRO: El voltaje máximo ({voltaje_string_max:.2f}V a {temp_min_diseno}°C) excede el límite del inversor ({limit_v}V). Reduzca paneles por serie.")
+    else:
+        alertas.append({
+            "codigo": "DC-VOLT-OK",
+            "mensaje": f"Voltaje Max {voltaje_string_max:.2f}V (a {temp_min_diseno}°C) es seguro (< {limit_v}V)."
+        })
     # 3. Selección de Conductor DC (Iterativo)
     Isc = panel['Isc']
     Imp = panel['Imp']

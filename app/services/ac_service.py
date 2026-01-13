@@ -7,7 +7,7 @@ from app.constants import (
     FACTORES_AGRUPAMIENTO
 )
 
-def calcular_circuito_ac(proyecto_input, resultados_dc, alertas):
+def calcular_circuito_ac(proyecto_input, resultados_dc, datos_climaticos, alertas):
     # 1. Obtener Datos
     inversor_data = db.get_inversor(proyecto_input.seleccion_componentes.modelo_inversor)
     diseno = proyecto_input.diseno_ac
@@ -40,7 +40,7 @@ def calcular_circuito_ac(proyecto_input, resultados_dc, alertas):
     tipo_canalizacion_principal = diseno.segmentos[0].tipo # Asumimos homogeneidad para factores
     
     # Datos climáticos Mock (Idealmente vendrían del API de clima)
-    TempPromedio = 34.0 
+    TempPromedio = datos_climaticos.temperatura_maxima_promedio
     
     for calibre in calibres_candidatos:
         datos_cable = db.cables_ac.loc[calibre]
@@ -49,8 +49,12 @@ def calcular_circuito_ac(proyecto_input, resultados_dc, alertas):
         # A. Factores de Corrección
         # Factor Temperatura (Vinikob 90C)
         # Buscamos el rango en la tabla (ej. 35 >= 34.0)
-        rango_temp = next((k for k in sorted(FACTORES_TEMP_AC_90C.keys()) if k >= TempPromedio), 60)
-        ft = FACTORES_TEMP_AC_90C[rango_temp]
+        rango_temp = next((k for k in sorted(FACTORES_TEMP_AC_90C.keys()) if k >= TempPromedio), None)
+        if rango_temp is None:
+             # Si hace más calor que el máximo de la tabla (>60C?), usamos un factor muy bajo por seguridad
+             ft = 0.41
+        else:
+             ft = FACTORES_TEMP_AC_90C[rango_temp]
         
         # Factor Agrupamiento (Solo si es Tubería)
         fa = 1.0

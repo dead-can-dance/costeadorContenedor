@@ -25,13 +25,32 @@ async def costear_proyecto(proyecto: ProyectoInput):
     alertas = []
     
     try:
-        # 1. Cálculo DC
-        res_dc = calcular_circuito_dc(proyecto, alertas)
+        # --- NUEVO: Obtener Clima Automáticamente ---
+        # 1. Parsear coordenadas (string "19.77, -103.97" -> lat, lon)
+        try:
+            lat_str, lon_str = proyecto.coordenadas.split(',')
+            lat, lon = float(lat_str.strip()), float(lon_str.strip())
+        except ValueError:
+            raise ValueError("Formato de coordenadas inválido. Debe ser 'lat, lon' (ej: '19.43, -99.13')")
+
+        # 2. Consultar Microservicio NASA
+        datos_climaticos = await obtener_datos_nasa(lat, lon)
         
-        # 2. Cálculo AC
-        res_ac = calcular_circuito_ac(proyecto, res_dc, alertas)
+        # Agregamos una alerta informativa para saber que funcionó
+        alertas.append({
+            "codigo": "INFO-CLIMA",
+            "mensaje": f"Clima obtenido de NASA: Tmin={datos_climaticos.temperatura_minima_historica}°C, TmaxAvg={datos_climaticos.temperatura_maxima_promedio}°C"
+        })
+
+        # --- Fin bloque clima ---
+
+        # 3. Cálculo DC (Pasando datos climáticos)
+        res_dc = calcular_circuito_dc(proyecto, datos_climaticos, alertas) # <--- OJO AQUÍ
         
-        # 3. Costeo y BOM
+        # 4. Cálculo AC (Pasando datos climáticos)
+        res_ac = calcular_circuito_ac(proyecto, res_dc, datos_climaticos, alertas) # <--- OJO AQUÍ
+        
+        # 5. Costeo
         resultado_final = generar_reporte_costos(
             proyecto, 
             res_dc, 
@@ -51,12 +70,9 @@ async def costear_proyecto(proyecto: ProyectoInput):
         )
 
     except ValueError as e:
-        # Errores de validación técnica (ej. cable no encontrado)
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         import traceback
         error_msg = traceback.format_exc()
-        print(error_msg) # Esto lo imprime en la consola de Docker
-        # Esto te devolverá el error completo en el Swagger en lugar de solo "Internal Server Error"
-        raise HTTPException(status_code=500, detail=f"Error interno detallado: {str(e)} | Trace: {error_msg}")
-    
+        print(error_msg)
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
