@@ -6,7 +6,7 @@ from app.services.ac_service import calcular_circuito_ac
 from app.services.costing_service import generar_reporte_costos
 from app.services.weather_service import obtener_datos_nasa
 
-app = FastAPI(title="Costeador Finsolar API", version="1.0")
+app = FastAPI(title="Costeador Finsolar API", version="1.1")
 
 # --- NUEVO ENDPOINT ---
 @app.get("/api/v1/clima", response_model=DatosClimaticos)
@@ -25,37 +25,64 @@ async def costear_proyecto(proyecto: ProyectoInput):
     alertas = []
     
     try:
-        # --- NUEVO: Obtener Clima Automáticamente ---
-        # 1. Parsear coordenadas (string "19.77, -103.97" -> lat, lon)
+        # 1. Parsear coordenadas
         try:
             lat_str, lon_str = proyecto.coordenadas.split(',')
             lat, lon = float(lat_str.strip()), float(lon_str.strip())
         except ValueError:
-            raise ValueError("Formato de coordenadas inválido. Debe ser 'lat, lon' (ej: '19.43, -99.13')")
+            raise ValueError("Formato de coordenadas inválido. Use 'lat, lon'")
 
-        # 2. Consultar Microservicio NASA
-        datos_climaticos = await obtener_datos_nasa(lat, lon)
+        datos_climaticos = None
+
+        # 2. Lógica Híbrida: Calibración vs NASA
+        usar_manual = False
+        if proyecto.calibracion_climatica and proyecto.calibracion_climatica.usar_override:
+            usar_manual = True
+            manual = proyecto.calibracion_climatica.datos_manuales
+            
+            # Verificamos que vengan los datos críticos
+            if manual.temp_min_media_mensual is not None and manual.temp_max_media_mensual is not None:
+                alertas.append({
+                    "codigo": "CLIMA-MANUAL",
+                    "mensaje": f"Usando datos manuales de: {proyecto.calibracion_climatica.fuente_datos}"
+                })
+                
+                # Mapeo de variables Conagua -> Variables de Diseño del Sistema
+                datos_climaticos = DatosClimaticos(
+                    # Para Voc usamos la mínima media reportada (4.3°C según tu ejemplo)
+                    # Nota: Podrías aplicar un margen de seguridad aquí si quisieras (ej. -2°C)
+                    temperatura_minima_historica=manual.temp_min_media_mensual,
+                    
+                    # Para Ampacidad usamos la máxima media reportada (27.8°C)
+                    temperatura_maxima_promedio=manual.temp_max_media_mensual,
+                    
+                    temperatura_promedio_anual=manual.temp_promedio_anual,
+                    ubicacion_validada=f"Manual Override ({lat}, {lon})"
+                )
+            else:
+                alertas.append({
+                    "codigo": "WARN-MANUAL-INCOMPLETO",
+                    "mensaje": "Se activó override pero faltan datos. Usando NASA como respaldo."
+                })
+                usar_manual = False
+
+        # Si no se usó manual (o faltaban datos), vamos a la NASA
+        if not usar_manual:
+            datos_climaticos = await obtener_datos_nasa(lat, lon)
+            alertas.append({
+                "codigo": "INFO-CLIMA-NASA",
+                "mensaje": f"Datos NASA: Tmin={datos_climaticos.temperatura_minima_historica}, Tmax={datos_climaticos.temperatura_maxima_promedio}"
+            })
+
+        # 3. Cálculo DC
+        res_dc = calcular_circuito_dc(proyecto, datos_climaticos, alertas)
         
-        # Agregamos una alerta informativa para saber que funcionó
-        alertas.append({
-            "codigo": "INFO-CLIMA",
-            "mensaje": f"Clima obtenido de NASA: Tmin={datos_climaticos.temperatura_minima_historica}°C, TmaxAvg={datos_climaticos.temperatura_maxima_promedio}°C"
-        })
-
-        # --- Fin bloque clima ---
-
-        # 3. Cálculo DC (Pasando datos climáticos)
-        res_dc = calcular_circuito_dc(proyecto, datos_climaticos, alertas) # <--- OJO AQUÍ
-        
-        # 4. Cálculo AC (Pasando datos climáticos)
-        res_ac = calcular_circuito_ac(proyecto, res_dc, datos_climaticos, alertas) # <--- OJO AQUÍ
+        # 4. Cálculo AC
+        res_ac = calcular_circuito_ac(proyecto, res_dc, datos_climaticos, alertas)
         
         # 5. Costeo
         resultado_final = generar_reporte_costos(
-            proyecto, 
-            res_dc, 
-            res_ac, 
-            proyecto.decision_interconexion
+            proyecto, res_dc, res_ac, proyecto.decision_interconexion
         )
 
         return ProyectoOutput(
@@ -73,6 +100,5 @@ async def costear_proyecto(proyecto: ProyectoInput):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         import traceback
-        error_msg = traceback.format_exc()
-        print(error_msg)
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")

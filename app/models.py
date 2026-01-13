@@ -1,12 +1,26 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional, Literal
 
+# --- Modelos de Calibración (NUEVO) ---
+class DatosManuales(BaseModel):
+    temp_max_media_mensual: Optional[float] = Field(None, description="Valor más alto de la media mensual (Conagua)")
+    temp_min_media_mensual: Optional[float] = Field(None, description="Valor más bajo de la media mensual (Conagua)")
+    temp_promedio_anual: Optional[float] = Field(None, description="Promedio anual de temperatura media")
+
+class CalibracionClimatica(BaseModel):
+    usar_override: bool = False
+    fuente_datos: str = "Manual/Conagua"
+    datos_manuales: DatosManuales
+
 # --- Modelos de Entrada (Request) ---
 
+# --- Modelos Existentes (Actualizados) ---
+
 class DatosClimaticos(BaseModel):
-    temperatura_minima_historica: float = Field(..., description="Mínima histórica para corrección de Voc (Invierno)")
-    temperatura_maxima_promedio: float = Field(..., description="Máxima promedio para corrección de ampacidad (Verano)")
-    ubicacion_validada: str = Field(..., description="Nombre de la región según NASA")
+    temperatura_minima_historica: float = Field(..., description="Usada para corrección de Voc")
+    temperatura_maxima_promedio: float = Field(..., description="Usada para ampacidad")
+    temperatura_promedio_anual: Optional[float] = Field(None, description="Dato informativo anual") # NUEVO CAMPO
+    ubicacion_validada: str
 
 class SeleccionComponentes(BaseModel):
     modelo_panel: str
@@ -39,11 +53,13 @@ class DecisionInterconexion(BaseModel):
 
 class ProyectoInput(BaseModel):
     nombre_proyecto: str
-    coordenadas: str # Formato "lat, lon"
-    seleccion_componentes: SeleccionComponentes
-    diseno_dc: DisenoDC
-    diseno_ac: DisenoAC
-    decision_interconexion: DecisionInterconexion
+    coordenadas: str 
+    seleccion_componentes: "SeleccionComponentes" # Usando ForwardRef o string si no está definido antes
+    diseno_dc: "DisenoDC"
+    diseno_ac: "DisenoAC"
+    decision_interconexion: "DecisionInterconexion"
+    # NUEVO CAMPO OPCIONAL
+    calibracion_climatica: Optional[CalibracionClimatica] = None
 
 # --- Modelos de Salida (Response) ---
 
