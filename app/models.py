@@ -3,6 +3,11 @@ from typing import List, Optional, Literal
 
 # --- Modelos de Entrada (Request) ---
 
+class DatosClimaticos(BaseModel):
+    temperatura_minima_historica: float = Field(..., description="Mínima histórica para corrección de Voc (Invierno)")
+    temperatura_maxima_promedio: float = Field(..., description="Máxima promedio para corrección de ampacidad (Verano)")
+    ubicacion_validada: str = Field(..., description="Nombre de la región según NASA")
+
 class SeleccionComponentes(BaseModel):
     modelo_panel: str
     modelo_inversor: str

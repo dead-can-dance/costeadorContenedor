@@ -1,11 +1,24 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from datetime import datetime
-from app.models import ProyectoInput, ProyectoOutput, ResumenCostos, ReporteGeneral
+from app.models import ProyectoInput, DatosClimaticos, ProyectoOutput, ResumenCostos, ReporteGeneral
 from app.services.dc_service import calcular_circuito_dc
 from app.services.ac_service import calcular_circuito_ac
 from app.services.costing_service import generar_reporte_costos
+from app.services.weather_service import obtener_datos_nasa
 
 app = FastAPI(title="Costeador Finsolar API", version="1.0")
+
+# --- NUEVO ENDPOINT ---
+@app.get("/api/v1/clima", response_model=DatosClimaticos)
+async def consultar_clima(
+    lat: float = Query(..., description="Latitud decimal (ej. 19.43)"),
+    lon: float = Query(..., description="Longitud decimal (ej. -99.13)")
+):
+    """
+    Obtiene temperaturas críticas (Min histórica y Max promedio) 
+    directamente de NASA POWER para dimensionamiento fotovoltaico.
+    """
+    return await obtener_datos_nasa(lat, lon)
 
 @app.post("/api/v1/costear-proyecto", response_model=ProyectoOutput)
 async def costear_proyecto(proyecto: ProyectoInput):
