@@ -1,21 +1,44 @@
 from app.database import db
 from app.models import ItemBOM, ResumenCostos
 
-def buscar_precio(sku, descripcion_fallback=""):
+def buscar_precio(sku, tipo_item=""):
     """
-    Busca el precio en materiales o componentes.
-    Si no encuentra, devuelve 0 y loguea (para no romper el flujo).
+    Busca el precio inteligentemente dependiendo del tipo de item.
+    Orden de búsqueda:
+    1. Base de datos específica (Paneles/Inversores)
+    2. Catálogo general de materiales (BOS)
     """
-    # Intentar en Materiales (BOS)
-    if sku in db.precios_materiales.index:
-        return float(db.precios_materiales.loc[sku]['Costo_Unitario'])
-    
-    # Intentar en Componentes (Paneles/Inversores - si tuvieras esa tabla separada)
-    # Por ahora asumimos que materiales tiene todo o agregamos lógica extra
-    
-    print(f"ALERTA: Precio no encontrado para SKU: {sku} ({descripcion_fallback})")
-    return 0.0
+    precio = 0.0
+    encontrado = False
 
+    # 1. Estrategia por Tipo de Componente
+    if tipo_item == "Panel Solar" and sku in db.paneles.index:
+        # Asegúrate de agregar la columna 'Costo' a paneles.csv
+        try:
+            precio = float(db.paneles.loc[sku]['Costo'])
+            encontrado = True
+        except KeyError:
+            print(f"⚠️ El panel {sku} existe, pero no tiene columna 'Costo' en el CSV.")
+
+    elif tipo_item == "Inversor" and sku in db.inversores.index:
+        # Asegúrate de agregar la columna 'Costo' a inversores.csv
+        try:
+            precio = float(db.inversores.loc[sku]['Costo'])
+            encontrado = True
+        except KeyError:
+             print(f"⚠️ El inversor {sku} existe, pero no tiene columna 'Costo' en el CSV.")
+
+    # 2. Estrategia Fallback (Buscar en Materiales Generales)
+    if not encontrado:
+        if sku in db.precios_materiales.index:
+            precio = float(db.precios_materiales.loc[sku]['Costo_Unitario'])
+            encontrado = True
+
+    if not encontrado:
+        print(f"ALERTA 🔴: Precio no encontrado para SKU: {sku} (Tipo: {tipo_item})")
+        return 0.0
+    
+    return precio
 def buscar_precio_mo(actividad):
     if actividad in db.precios_mo.index:
         return float(db.precios_mo.loc[actividad]['Costo_Unitario'])
