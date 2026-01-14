@@ -1,17 +1,19 @@
 services:
   api:
-    # Construye la imagen usando el Dockerfile en el directorio actual
     build: .
     restart: always
     container_name: costeador_api_service
+    
+    # --- ACCESO DIRECTO ---
+    # Esto abre el puerto 8000 para que entres con tu IP
     ports:
-      # Mapea el puerto 8000 de tu máquina al puerto 8000 del contenedor
-      - 8000:8000
-      - 81:81
+      - "8000:8000"
+    
     volumes:
-      # Sincroniza tu carpeta local app con la carpeta /app del contenedor
-      # Esto te permite editar código en local y ver los cambios al instante (live-reload)
       - ./app:/code/app
     environment:
-      # Buena práctica: establecer la zona horaria
       - TZ=America/Mexico_City
+
+    # Usamos la red por defecto de Docker
+    networks:
+      - default
