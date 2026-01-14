@@ -1,5 +1,11 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional, Literal
+from enum import Enum
+
+# Definir las opciones válidas
+class TipoCanalizacion(str, Enum):
+    TUBERIA = "tubería"
+    CHAROLA = "charola"
 
 # --- Modelos de Calibración (NUEVO) ---
 class DatosManuales(BaseModel):
@@ -88,3 +94,4 @@ class ProyectoOutput(BaseModel):
     resumen_costos: ResumenCostos
     BOM_detallada: List[ItemBOM]
     alertas_ingenieria: List[dict] = []
+

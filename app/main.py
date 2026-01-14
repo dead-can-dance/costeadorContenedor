@@ -5,8 +5,18 @@ from app.services.dc_service import calcular_circuito_dc
 from app.services.ac_service import calcular_circuito_ac
 from app.services.costing_service import generar_reporte_costos
 from app.services.weather_service import obtener_datos_nasa
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="Costeador Finsolar API", version="1.1")
+
+# Configuración Permisiva para Desarrollo
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # En producción, cambia esto por tu dominio real
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # --- NUEVO ENDPOINT ---
 @app.get("/api/v1/clima", response_model=DatosClimaticos)

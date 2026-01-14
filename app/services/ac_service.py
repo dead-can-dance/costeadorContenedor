@@ -6,6 +6,7 @@ from app.constants import (
     FACTORES_TEMP_AC_90C,
     FACTORES_AGRUPAMIENTO
 )
+from fastapi import HTTPException
 
 def calcular_circuito_ac(proyecto_input, resultados_dc, datos_climaticos, alertas):
     # 1. Obtener Datos
@@ -87,8 +88,14 @@ def calcular_circuito_ac(proyecto_input, resultados_dc, datos_climaticos, alerta
             break
     
     if not calibre_seleccionado:
-        raise ValueError(f"No se encontró un calibre AC adecuado (Mínimo probado: 4 AWG). Revise longitud o corriente.")
-
+        raise HTTPException(
+        status_code=422, # Entidad no procesable
+        detail={
+            "error_code": "CABLE_INSUFICIENTE",
+            "mensaje": "No se encontró un cable AC comercial que soporte la corriente requerida bajo estas condiciones (Temp/Agrupamiento).",
+            "sugerencia": "Intente cambiar a 'Charola' o reduzca la potencia del inversor."
+        }
+    )
     # 4. Cálculo de Canalización AC
     materiales_canalizacion = []
     
@@ -161,4 +168,3 @@ def calcular_circuito_ac(proyecto_input, resultados_dc, datos_climaticos, alerta
         "tierra": calibre_tierra,
         "canalizacion": materiales_canalizacion
     }
-    
