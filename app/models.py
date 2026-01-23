@@ -1,97 +1,91 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional, Literal
+from typing import List, Optional, Literal, Dict, Any
 from enum import Enum
 
-# Definir las opciones válidas
+# --- ENUMS (Opciones fijas) ---
+
+class TipoAnclaje(str, Enum):
+    COPLANAR = "coplanar"
+    TILT = "fix tilt"
+    GROUND = "groundmount"
+    CARPORT = "carport"
+
 class TipoCanalizacion(str, Enum):
     TUBERIA = "tubería"
     CHAROLA = "charola"
 
-# --- Modelos de Calibración (NUEVO) ---
-class DatosManuales(BaseModel):
-    temp_max_media_mensual: Optional[float] = Field(None, description="Valor más alto de la media mensual (Conagua)")
-    temp_min_media_mensual: Optional[float] = Field(None, description="Valor más bajo de la media mensual (Conagua)")
-    temp_promedio_anual: Optional[float] = Field(None, description="Promedio anual de temperatura media")
+# --- MODELOS DE ENTRADA (INPUTS) ---
 
 class CalibracionClimatica(BaseModel):
     usar_override: bool = False
-    fuente_datos: str = "Manual/Conagua"
-    datos_manuales: DatosManuales
-
-# --- Modelos de Entrada (Request) ---
-
-# --- Modelos Existentes (Actualizados) ---
-
-class DatosClimaticos(BaseModel):
-    temperatura_minima_historica: float = Field(..., description="Usada para corrección de Voc")
-    temperatura_maxima_promedio: float = Field(..., description="Usada para ampacidad")
-    temperatura_promedio_anual: Optional[float] = Field(None, description="Dato informativo anual") # NUEVO CAMPO
-    ubicacion_validada: str
+    datos_manuales: Optional[Dict[str, float]] = None
+    # Ejemplo datos_manuales: {"temp_min": 5.0, "temp_max": 35.0}
 
 class SeleccionComponentes(BaseModel):
-    modelo_panel: str
-    modelo_inversor: str
-    modelo_cable_dc: str = "8 AWG" # Default o a elegir
-    modelo_cable_ac: str = "1/0 AWG" # Default o a elegir
+    modelo_panel: str = Field(..., description="SKU del panel (ej. CS7N-680TB-AG)")
+    modelo_inversor: str = Field(..., description="SKU del inversor (ej. Solis-75K-5G-US)")
+    tipo_anclaje: TipoAnclaje = Field(..., description="Tipo de estructura para costeo")
+    # Nota: modelo_cable_ac se eliminó (se calcula automático)
+    # modelo_cable_dc se puede dejar opcional o manejar interno
 
-class SegmentoCanalizacion(BaseModel):
-    tipo: Literal["tubería", "charola"]
-    longitud: float
-    ubicacion: Optional[Literal["Subterránea", "Expuesta"]] = None # Solo para AC tubería
-
-class DisenoDC(BaseModel):
-    paneles_por_serie: int
-    numero_de_series: int
-    segmentos: List[SegmentoCanalizacion]
-
-class DisenoAC(BaseModel):
-    numero_de_inversores: int
-    segmentos: List[SegmentoCanalizacion]
-    metodo_agrupacion_charola: Optional[Literal["Lineal", "Trébol"]] = "Trébol"
-
-class DecisionInterconexion(BaseModel):
-    punto_conexion_elegido: Literal[
-        "Tablero Principal", 
-        "Transformador MT", 
-        "Acometida (Cable)", 
-        "Tablero Secundario/Adecuaciones"
-    ]
+class ParametrosDiseño(BaseModel):
+    paneles_por_serie_sugerido: int = Field(..., description="Cantidad de paneles por string deseada (ej. 15)")
+    distancia_dc_promedio: float = Field(..., description="Longitud promedio de los strings hacia el inversor (metros)")
+    distancia_ac_total: float = Field(..., description="Distancia del inversor al punto de interconexión (metros)")
+    tipo_canalizacion: TipoCanalizacion = Field(..., description="Preferencia de canalización (Tubería/Charola)")
 
 class ProyectoInput(BaseModel):
     nombre_proyecto: str
-    coordenadas: str 
-    seleccion_componentes: "SeleccionComponentes" # Usando ForwardRef o string si no está definido antes
-    diseno_dc: "DisenoDC"
-    diseno_ac: "DisenoAC"
-    decision_interconexion: "DecisionInterconexion"
-    # NUEVO CAMPO OPCIONAL
+    potencia_req_kw: float = Field(..., gt=0, description="Potencia Objetivo del Proyecto en kW (Dato Principal)")
+    coordenadas: str = Field(..., description="Latitud, Longitud (ej. 21.115, -101.927)")
+    seleccion_componentes: SeleccionComponentes
+    parametros_diseno: ParametrosDiseño
+    decision_interconexion: Dict[str, Any] = Field(default_factory=dict, description="Datos extra (tablero, trafo, etc.)")
     calibracion_climatica: Optional[CalibracionClimatica] = None
 
-# --- Modelos de Salida (Response) ---
+# --- MODELOS DE SALIDA (OUTPUTS) ---
 
-class ItemBOM(BaseModel):
-    item: str
-    especificacion: str
-    cantidad: float
-    unidad: str
+class ResumenProyecto(BaseModel):
+    potencia_solicitada_kw: float
+    potencia_instalada_kw: float
+    cantidad_modulos: int
+    cantidad_inversores: int
+    cantidad_series: int
 
-class ResumenCostos(BaseModel):
-    Costo_Materiales: float
-    Costo_Mano_Obra: float
-    Costo_Directo_Total: float
-    Contingencia: float
-    Comision: float
-    Utilidad: float
-    CAPEX_Final: float
+class Alerta(BaseModel):
+    codigo: str
+    mensaje: str
+    nivel: Literal["info", "warning", "error"]
 
-class ReporteGeneral(BaseModel):
-    nombre_proyecto: str
-    estatus: str
-    fecha_calculo: str
+class ResultadoIngenieriaDC(BaseModel):
+    cable_seleccionado: str
+    proteccion_requerida: str
+    tierra_fisica: str
+    caida_tension_pct: float
+    total_metros_cable: float
+    detalles_series: Dict[str, Any]
+
+class ResultadoIngenieriaAC(BaseModel):
+    cable_seleccionado: str
+    proteccion_requerida: float
+    caida_tension_pct: float
+    canalizacion_sugerida: Dict[str, Any]
+
+class DesgloseCostos(BaseModel):
+    modulos: Dict[str, Any]
+    inversores: Dict[str, Any]
+    estructura: Dict[str, Any]
+    bos_trayectorias: Dict[str, Any]
+    mano_obra: Dict[str, Any]
+    costos_fijos_operativos: Dict[str, Any]
+
+class ResumenFinanciero(BaseModel):
+    costo_directo_total: float
+    precio_venta_sugerido: float
+    indicador_usd_watt: float
 
 class ProyectoOutput(BaseModel):
-    reporte_general: ReporteGeneral
-    resumen_costos: ResumenCostos
-    BOM_detallada: List[ItemBOM]
-    alertas_ingenieria: List[dict] = []
-
+    resumen_proyecto: ResumenProyecto
+    ingenieria: Dict[str, Any]  # Contiene dc: ResultadoIngenieriaDC, ac: ResultadoIngenieriaAC
+    costos: Dict[str, Any]      # Contiene desglose_costos y resumen_financiero
+    alertas: List[Alerta]

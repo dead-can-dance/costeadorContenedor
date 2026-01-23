@@ -1,4 +1,5 @@
 import math
+from fastapi import HTTPException
 from app.database import db
 from app.constants import (
     TABLA_CONDUIT_IMC_40, 
@@ -6,165 +7,182 @@ from app.constants import (
     FACTORES_TEMP_AC_90C,
     FACTORES_AGRUPAMIENTO
 )
-from fastapi import HTTPException
 
-def calcular_circuito_ac(proyecto_input, resultados_dc, datos_climaticos, alertas):
-    # 1. Obtener Datos
-    inversor_data = db.get_inversor(proyecto_input.seleccion_componentes.modelo_inversor)
-    diseno = proyecto_input.diseno_ac
+def calcular_circuito_ac(inversor_modelo: str, cantidad_inversores: int, distancia: float, tipo_canalizacion: str, clima):
+    """
+    Motor de Ingeniería AC (Lado Inversor -> Interconexión).
     
+    Inputs:
+    - inversor_modelo: SKU del inversor.
+    - cantidad_inversores: Cantidad calculada por potencia.
+    - distancia: Metros totales de trayectoria.
+    - tipo_canalizacion: 'tubería' o 'charola'.
+    - clima: Objeto con datos de temperatura (NASA/Override).
+    """
+    
+    # 1. OBTENER DATOS TÉCNICOS
+    inversor_data = db.get_inversor(inversor_modelo)
+    if not inversor_data:
+        raise ValueError(f"Inversor {inversor_modelo} no encontrado en DB.")
+
     Imax_CA = float(inversor_data['Imax_CA'])
-    Vff = float(inversor_data['Vff'])
+    Vff = float(inversor_data['Vff']) # Voltaje Fase-Fase (ej. 480V)
     
-    # 2. Selección de Protecciones AC (Primero Protecciones, luego cable)
-    Idiseno = Imax_CA * 1.25
+    # 2. SELECCIÓN DE PROTECCIONES (ITM)
+    # Regla NEC: Corriente continua * 1.25
+    Idiseno_unitario = Imax_CA * 1.25
     
-    # Lista comercial de ITMs (puedes moverla a constants.py si crece)
-    itms_comerciales = [15, 20, 30, 40, 50, 60, 70, 80, 100, 125, 150, 175, 200, 225, 250, 400]
-    itm_ac = next((x for x in itms_comerciales if x >= Idiseno), None)
+    # Lista comercial de ITMs (Amperes)
+    itms_comerciales = [15, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 225, 250, 300, 350, 400]
     
-    if not itm_ac:
-        raise ValueError(f"La corriente requerida ({Idiseno}A) excede los ITMs comerciales disponibles.")
+    # Seleccionamos el ITM inmediato superior
+    itm_seleccionado = next((x for x in itms_comerciales if x >= Idiseno_unitario), None)
+    
+    if not itm_seleccionado:
+        # Si excede 400A, es un proyecto industrial mayor, lanzamos alerta o error
+        raise HTTPException(400, f"La corriente requerida ({Idiseno_unitario}A) excede los ITMs comerciales estándar (Máx 400A).")
 
-    # Selección de Tierra AC basada en el ITM (Tabla 250-122)
+    # 3. SELECCIÓN DE TIERRA FÍSICA (Tabla 250-122)
     # Buscamos la llave en el diccionario que sea mayor o igual al ITM
-    capacidad_tierra = next((k for k in sorted(TABLA_TIERRA_250_122.keys()) if k >= itm_ac), 1200)
+    # TABLA_TIERRA_250_122 debe ser {Amp_Proteccion: "Calibre_AWG"}
+    capacidad_tierra = next((k for k in sorted(TABLA_TIERRA_250_122.keys()) if k >= itm_seleccionado), 1200)
     calibre_tierra = TABLA_TIERRA_250_122[capacidad_tierra]
 
-    # 3. Selección de Conductor AC (Ciclo Iterativo)
+    # 4. SELECCIÓN DE CONDUCTOR DE POTENCIA (Ciclo Iterativo Inteligente)
     calibre_seleccionado = None
-    # Obtenemos lista de calibres AC disponibles en CSV (4 AWG, 2 AWG, etc.)
-    # IMPORTANTE: Tu regla de negocio dice iniciar desde 4 AWG mínimo para AC
-    calibres_candidatos = [c for c in db.cables_ac.index if c in ["4 AWG", "2 AWG", "1/0 AWG", "2/0 AWG", "3/0 AWG", "4/0 AWG"]]
+    caida_final = 0.0
     
-    longitud_total = sum(s.longitud for s in diseno.segmentos)
-    tipo_canalizacion_principal = diseno.segmentos[0].tipo # Asumimos homogeneidad para factores
+    # Filtramos solo cables aptos para AC (Generalmente de 4 AWG hacia arriba para media tensión)
+    # Nota: db.cables_ac.index debe devolver strings como "4 AWG", "1/0 AWG", etc.
+    calibres_candidatos = [c for c in db.cables_ac.index if c not in ["14 AWG", "12 AWG", "10 AWG", "8 AWG", "6 AWG"]]
     
-    # Datos climáticos Mock (Idealmente vendrían del API de clima)
-    TempPromedio = datos_climaticos.temperatura_maxima_promedio
+    # Temperatura para factores de corrección
+    temp_sitio = clima.temperatura_maxima_promedio
     
     for calibre in calibres_candidatos:
         datos_cable = db.cables_ac.loc[calibre]
-        ampacidad_base = datos_cable['Ampacidad_90C']
+        ampacidad_base = float(datos_cable['Ampacidad_90C'])
         
-        # A. Factores de Corrección
-        # Factor Temperatura (Vinikob 90C)
-        # Buscamos el rango en la tabla (ej. 35 >= 34.0)
-        rango_temp = next((k for k in sorted(FACTORES_TEMP_AC_90C.keys()) if k >= TempPromedio), None)
-        if rango_temp is None:
-             # Si hace más calor que el máximo de la tabla (>60C?), usamos un factor muy bajo por seguridad
-             ft = 0.41
-        else:
-             ft = FACTORES_TEMP_AC_90C[rango_temp]
+        # A. Factor de Corrección por Temperatura
+        # Buscamos el rango en la tabla (ej. si temp es 32, busca el rango 31-35)
+        # FACTORES_TEMP_AC_90C Keys: Limite Superior del rango (ej. 30, 35, 40...)
+        rango_temp = next((k for k in sorted(FACTORES_TEMP_AC_90C.keys()) if k >= temp_sitio), None)
+        ft = FACTORES_TEMP_AC_90C.get(rango_temp, 0.41) # 0.41 si hace un calor extremo (>60C)
         
-        # Factor Agrupamiento (Solo si es Tubería)
+        # B. Factor de Agrupamiento (Solo afecta severamente a Tubería)
         fa = 1.0
-        if tipo_canalizacion_principal == "tubería":
-            # Asumimos 3 fases + 1 neutro = 4 conductores activos -> Fa aprox 0.8
-            # Si quieres ser exacto: num_inversores * 3 fases
-            fa = FACTORES_AGRUPAMIENTO[6] # Valor 0.80 para 4-6 conductores
+        if tipo_canalizacion == "tubería":
+            # Asumimos 3 fases + 1 neutro por inversor = 4 conductores activos
+            # Si van varios inversores en la misma tubería, esto cambiaría, 
+            # pero por estándar asumimos 1 tubería por inversor o agrupamiento controlado.
+            # Usamos valor conservador para 4-6 conductores
+            fa = FACTORES_AGRUPAMIENTO.get(6, 0.8) 
             
+        # Ampacidad Real del Cable en esas condiciones
         Icorregida = ampacidad_base * ft * fa
         
-        # Validación 1: Ampacidad (Cable >= Protección)
-        if Icorregida < itm_ac:
-            continue
+        # VALIDACIÓN 1: ¿El cable aguanta la corriente protegida?
+        # El cable debe soportar la corriente del ITM (o Idiseno según criterio estricto NEC)
+        if Icorregida < itm_seleccionado:
+            continue # Cable muy delgado, siguiente...
 
-        # Validación 2: Caída de Tensión
+        # VALIDACIÓN 2: Caída de Tensión
         # Formula Trifásica: % = (sqrt(3) * Z * L * I) / Vff
-        constante_fases = 1.732 # Raíz de 3
-        z_ohm_km = datos_cable['Impedancia_Acero'] # Usamos columna 'Impedancia_Acero' del CSV
+        # Z debe venir en Ohm/km
+        z_ohm_km = float(datos_cable['Impedancia_Acero']) 
         z_ohm_m = z_ohm_km / 1000
         
-        v_drop = constante_fases * z_ohm_m * longitud_total * Imax_CA
+        # Usamos Imax real del inversor para caída de tensión (no la del ITM)
+        v_drop = 1.732 * z_ohm_m * distancia * Imax_CA
         porcentaje_drop = (v_drop / Vff) * 100
         
-        if porcentaje_drop < 3.0:
+        if porcentaje_drop < 3.0: # Cumple norma (3%)
             calibre_seleccionado = calibre
-            alertas.append({
-                "codigo": "AC-CALC-OK", 
-                "mensaje": f"Calibre AC {calibre} seleccionado. Vdrop: {porcentaje_drop:.2f}%. ITM: {itm_ac}A"
-            })
-            break
+            caida_final = porcentaje_drop
+            break # ¡Encontramos el óptimo!
     
     if not calibre_seleccionado:
-        raise HTTPException(
-        status_code=422, # Entidad no procesable
-        detail={
-            "error_code": "CABLE_INSUFICIENTE",
-            "mensaje": "No se encontró un cable AC comercial que soporte la corriente requerida bajo estas condiciones (Temp/Agrupamiento).",
-            "sugerencia": "Intente cambiar a 'Charola' o reduzca la potencia del inversor."
+        # Fallback manual o error si ni el 250 kcmil aguanta (raro en baja tensión)
+        return {
+            "cable_seleccionado": None,
+            "error": "Distancia excesiva para baja tensión. Requiere media tensión."
         }
-    )
-    # 4. Cálculo de Canalización AC
+
+    # 5. CÁLCULO DE CANALIZACIÓN (La parte robusta que pediste)
     materiales_canalizacion = []
     
-    # Datos físicos del cable seleccionado
-    diam_fase = db.cables_ac.loc[calibre_seleccionado]['DiametroExt_mm']
-    # Buscamos diametro de tierra en la tabla DC (Viakon) o AC si existe, usaremos DC como referencia segura o cálculo aprox
-    # Para ser robustos, si el calibre tierra está en cables_ac, lo usamos, si no estimamos.
-    try:
-        diam_tierra = db.cables_ac.loc[calibre_tierra]['DiametroExt_mm']
-    except:
-        diam_tierra = diam_fase * 0.7 # Estimación si no está en CSV
-        
-    num_inv = diseno.numero_de_inversores
+    # Datos físicos
+    diam_fase = float(db.cables_ac.loc[calibre_seleccionado]['DiametroExt_mm'])
     
-    for segmento in diseno.segmentos:
-        if segmento.tipo == "tubería":
-            # Metodo ÁREA (NOM)
-            # 3 Fases + 1 Neutro por inversor = 4
-            num_cables_potencia = num_inv * 4
-            num_cables_tierra = num_inv * 1 # Una tierra por inversor
-            
-            area_fase = math.pi * (diam_fase/2)**2
-            area_tierra = math.pi * (diam_tierra/2)**2
-            
-            area_total_ocupada = (num_cables_potencia * area_fase) + (num_cables_tierra * area_tierra)
-            
-            # Buscar tubería en Tabla IMC 40%
-            # Las llaves del dict son mm2, valores son pulgadas. Invertimos lógica o iteramos valores.
-            # En constants.py: TABLA_CONDUIT_IMC_40 = {89: '1/2"', ...} (Llave es mm2)
-            tuberia = next((v for k, v in TABLA_CONDUIT_IMC_40.items() if k >= area_total_ocupada), '4"')
-            
-            materiales_canalizacion.append({
-                "item": "Tubo Conduit Pared Delgada", # SKU Genérico
-                "especificacion": tuberia, # SKU Variable
-                "cantidad": segmento.longitud,
-                "unidad": "m"
-            })
-            
-        elif segmento.tipo == "charola":
-            # Método ANCHO (Finsolar)
-            metodo = diseno.metodo_agrupacion_charola # "Lineal" o "Trébol"
-            
-            ancho_requerido = 0
-            if metodo == "Lineal":
-                total_conductores = (num_inv * 4) + (num_inv * 1)
-                ancho_cables = (num_inv * 4 * diam_fase) + (num_inv * 1 * diam_tierra)
-                ancho_espacios = (total_conductores - 1) * diam_fase
-                ancho_requerido = ancho_cables + ancho_espacios
-            else: # Trébol
-                # Grupo = 3 fases + 1 neutro + 1 tierra
-                ancho_grupo = (3 * diam_fase) + (1 * diam_fase) + (1 * diam_tierra)
-                ancho_grupos = num_inv * ancho_grupo
-                ancho_espacios = (num_inv - 1) * (2.15 * diam_fase)
-                ancho_requerido = ancho_grupos + ancho_espacios
-            
-            # Seleccionar ancho comercial (mm)
-            anchos_comerciales = [100, 150, 200, 300, 400, 500]
-            ancho_final = next((x for x in anchos_comerciales if x >= ancho_requerido), 500)
-            
-            materiales_canalizacion.append({
-                "item": "Charola tipo Malla",
-                "especificacion": f"{ancho_final} mm",
-                "cantidad": segmento.longitud,
-                "unidad": "m"
-            })
+    # Diámetro tierra: Si no está en CSV AC, buscamos en DC o estimamos
+    try:
+        diam_tierra = float(db.cables_ac.loc[calibre_tierra]['DiametroExt_mm'])
+    except:
+        # Fallback seguro: aprox 70% del diametro de fase si no hay dato
+        diam_tierra = diam_fase * 0.7 
 
+    if tipo_canalizacion == "tubería":
+        # --- CÁLCULO TUBERÍA (Método de Áreas - NOM) ---
+        # 3 Fases + 1 Neutro + 1 Tierra por Inversor
+        num_cables_potencia = 4
+        num_cables_tierra = 1
+        
+        area_fase = math.pi * (diam_fase/2)**2
+        area_tierra = math.pi * (diam_tierra/2)**2
+        
+        # Área total de ocupación (mm2)
+        area_ocupada_unitaria = (num_cables_potencia * area_fase) + (num_cables_tierra * area_tierra)
+        
+        # Buscamos diámetro de tubería que permita ese relleno al 40%
+        # TABLA_CONDUIT_IMC_40: {Area_Disponible_mm2: "Diámetro_Pulgadas"}
+        # Ordenamos las llaves para buscar la primera que quepa
+        tuberia_optima = next((v for k, v in sorted(TABLA_CONDUIT_IMC_40.items()) if k >= area_ocupada_unitaria), '4"')
+        
+        materiales_canalizacion.append({
+            "item": "Tubo Conduit Pared Gruesa (IMC)",
+            "especificacion": tuberia_optima,
+            "cantidad_total": distancia * cantidad_inversores, # Metros totales (1 tubo por inv)
+            "unidad": "m",
+            "nota": f"1 Tubería de {tuberia_optima} por cada inversor"
+        })
+
+    elif tipo_canalizacion == "charola":
+        # --- CÁLCULO CHAROLA (Método de Ancho - Finsolar) ---
+        # Asumimos que TODOS los inversores van a la misma charola principal (Trébol)
+        
+        # Grupo Trébol = (3 Fases + 1 Neutro + 1 Tierra) agrupados
+        ancho_grupo = (3 * diam_fase) + (1 * diam_fase) + (1 * diam_tierra)
+        
+        # Ancho total de cables
+        ancho_cables = cantidad_inversores * ancho_grupo
+        
+        # Espaciamiento obligatorio (un diámetro entre grupos para ventilación)
+        ancho_espacios = (cantidad_inversores - 1) * (diam_fase)
+        if ancho_espacios < 0: ancho_espacios = 0
+        
+        ancho_total_requerido_mm = ancho_cables + ancho_espacios
+        
+        # Seleccionar ancho comercial (100mm a 600mm)
+        anchos_comerciales = [100, 150, 200, 300, 400, 500, 600]
+        ancho_charola = next((x for x in anchos_comerciales if x >= ancho_total_requerido_mm), 600)
+        
+        materiales_canalizacion.append({
+            "item": "Charola tipo Malla",
+            "especificacion": f"{ancho_charola} mm",
+            "cantidad_total": distancia, # Una sola charola para todos
+            "unidad": "m",
+            "detalles": f"Ocupación: {ancho_total_requerido_mm:.1f}mm / {ancho_charola}mm"
+        })
+
+    # 6. RETORNO DE RESULTADOS
     return {
-        "calibre": calibre_seleccionado,
-        "itm": itm_ac,
-        "tierra": calibre_tierra,
-        "canalizacion": materiales_canalizacion
+        "cable_seleccionado": calibre_seleccionado,
+        "proteccion_requerida": itm_seleccionado, # Amperes
+        "tierra_fisica": calibre_tierra,
+        "caida_tension_pct": round(caida_final, 2),
+        "canalizacion_sugerida": {
+            "tipo": tipo_canalizacion,
+            "materiales": materiales_canalizacion,
+            "metros_totales": distancia if tipo_canalizacion == "charola" else distancia * cantidad_inversores
+        }
     }
