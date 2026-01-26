@@ -15,6 +15,11 @@ class TipoCanalizacion(str, Enum):
     CHAROLA = "charola"
 
 # --- MODELOS DE ENTRADA (INPUTS) ---
+class DatosClimaticos(BaseModel):
+    temperatura_minima_historica: float = Field(..., description="Mínima histórica para corrección de Voc (NASA)")
+    temperatura_maxima_promedio: float = Field(..., description="Máxima promedio para ampacidad (NASA)")
+    temperatura_promedio_anual: Optional[float] = Field(None, description="Promedio anual")
+    ubicacion_validada: str
 
 class CalibracionClimatica(BaseModel):
     usar_override: bool = False

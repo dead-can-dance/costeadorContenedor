@@ -1,161 +1,92 @@
-from app.database import db
-from app.models import ItemBOM, ResumenCostos
+# app/services/costing_service.py
+from app.constants import (
+    TABLA_COSTOS_FIJOS_POTENCIA, 
+    COSTOS_ESTRUCTURA_USD_PER_WATT,
+    MO_INSTALACION_PANEL_USD,
+    MO_INSTALACION_INVERSOR_USD,
+    COSTO_METRO_LINEAL_DC,
+    COSTO_METRO_LINEAL_AC
+)
 
-def buscar_precio(sku, tipo_item=""):
+def interpolar_costo_fijo(potencia_proyecto_kw):
+    """Calcula el costo fijo operativo basado en la tabla de potencia."""
+    tabla = sorted(TABLA_COSTOS_FIJOS_POTENCIA, key=lambda x: x[0])
+    
+    if potencia_proyecto_kw <= tabla[0][0]: return tabla[0][1]
+    if potencia_proyecto_kw >= tabla[-1][0]:
+        factor = tabla[-1][1] / tabla[-1][0]
+        return potencia_proyecto_kw * factor
+
+    for i in range(len(tabla) - 1):
+        p_inf, c_inf = tabla[i]
+        p_sup, c_sup = tabla[i+1]
+        if p_inf <= potencia_proyecto_kw <= p_sup:
+            ratio = (potencia_proyecto_kw - p_inf) / (p_sup - p_inf)
+            return c_inf + ratio * (c_sup - c_inf)
+    return tabla[-1][1]
+
+def generar_reporte_costos(proyecto_input, datos_calculados):
     """
-    Busca el precio inteligentemente dependiendo del tipo de item.
-    Orden de búsqueda:
-    1. Base de datos específica (Paneles/Inversores)
-    2. Catálogo general de materiales (BOS)
+    Genera el BOM financiero basado en la ingeniería automática.
     """
-    precio = 0.0
-    encontrado = False
-
-    # 1. Estrategia por Tipo de Componente
-    if tipo_item == "Panel Solar" and sku in db.paneles.index:
-        # Asegúrate de agregar la columna 'Costo' a paneles.csv
-        try:
-            precio = float(db.paneles.loc[sku]['Costo'])
-            encontrado = True
-        except KeyError:
-            print(f"⚠️ El panel {sku} existe, pero no tiene columna 'Costo' en el CSV.")
-
-    elif tipo_item == "Inversor" and sku in db.inversores.index:
-        # Asegúrate de agregar la columna 'Costo' a inversores.csv
-        try:
-            precio = float(db.inversores.loc[sku]['Costo'])
-            encontrado = True
-        except KeyError:
-             print(f"⚠️ El inversor {sku} existe, pero no tiene columna 'Costo' en el CSV.")
-
-    # 2. Estrategia Fallback (Buscar en Materiales Generales)
-    if not encontrado:
-        if sku in db.precios_materiales.index:
-            precio = float(db.precios_materiales.loc[sku]['Costo_Unitario'])
-            encontrado = True
-
-    if not encontrado:
-        print(f"ALERTA 🔴: Precio no encontrado para SKU: {sku} (Tipo: {tipo_item})")
-        return 0.0
+    # 1. Recuperar Cantidades Calculadas
+    num_paneles = datos_calculados['resumen_proyecto']['modulos']
+    num_inversores = datos_calculados['resumen_proyecto']['inversores']
+    potencia_kw = datos_calculados['resumen_proyecto']['potencia_instalada']
+    potencia_watts = potencia_kw * 1000
     
-    return precio
-def buscar_precio_mo(actividad):
-    if actividad in db.precios_mo.index:
-        return float(db.precios_mo.loc[actividad]['Costo_Unitario'])
-    return 0.0
-
-def buscar_costo_indirecto(concepto):
-    if concepto in db.precios_indirectos.index:
-        return float(db.precios_indirectos.loc[concepto]['Costo'])
-    return 0.0
-
-def generar_reporte_costos(proyecto_input, res_dc, res_ac, decision_interconexion):
-    BOM = []
+    # 2. Precios Unitarios (En producción vendrían de DB)
+    precio_panel = 180.00   # Mock
+    precio_inversor = 2500.00 # Mock
     
-    # ------------------------------------------------
-    # 1. Generación de BOM (Cantidades)
-    # ------------------------------------------------
+    # 3. Cálculos por Partida
     
-    # 1.1 Paneles
-    cant_paneles = proyecto_input.diseno_dc.paneles_por_serie * proyecto_input.diseno_dc.numero_de_series
-    BOM.append(ItemBOM(
-        item="Panel Solar",
-        especificacion=proyecto_input.seleccion_componentes.modelo_panel,
-        cantidad=cant_paneles,
-        unidad="pza"
-    ))
+    # A. Materiales Mayores
+    total_paneles = num_paneles * precio_panel
+    total_inversores = num_inversores * precio_inversor
     
-    # 1.2 Inversores
-    BOM.append(ItemBOM(
-        item="Inversor",
-        especificacion=proyecto_input.seleccion_componentes.modelo_inversor,
-        cantidad=proyecto_input.diseno_ac.numero_de_inversores,
-        unidad="pza"
-    ))
-    
-    # 1.3 Materiales DC
-    long_dc = sum(s.longitud for s in proyecto_input.diseno_dc.segmentos)
-    # Cable PV: (Longitud total * num_series * 2 polos)
-    BOM.append(ItemBOM(item="Cable Fotovoltaico", especificacion=res_dc['calibre'], cantidad=long_dc * proyecto_input.diseno_dc.numero_de_series * 2, unidad="m"))
-    # Tierra DC: (Longitud total * 1 hilo) - Se asume tierra corre por todo el trayecto
-    BOM.append(ItemBOM(item="Cable Fotovoltaico (Tierra)", especificacion=res_dc['tierra'], cantidad=long_dc, unidad="m")) # Usamos cable PV para tierra en exterior o desnudo según práctica, aqui asumimos PV por simplicidad SKU
-    # Protecciones DC
-    BOM.append(ItemBOM(item="Interruptor Termomagnético", especificacion=f"{res_dc['itm']}A", cantidad=proyecto_input.diseno_dc.numero_de_series, unidad="pza")) # 1 por serie o por MPPT
-    # Canalización DC
-    for mat in res_dc['canalizacion']:
-        BOM.append(ItemBOM(item=mat['item'], especificacion=mat['especificacion'], cantidad=mat['cantidad'], unidad=mat['unidad']))
-
-    # 1.4 Materiales AC
-    long_ac = sum(s.longitud for s in proyecto_input.diseno_ac.segmentos)
-    num_inv = proyecto_input.diseno_ac.numero_de_inversores
-    # Cable AC: (Longitud * num_inv * 4 hilos [3F+N])
-    BOM.append(ItemBOM(item="Cable THW-LS", especificacion=res_ac['calibre'], cantidad=long_ac * num_inv * 4, unidad="m"))
-    # Tierra AC
-    BOM.append(ItemBOM(item="Cable THW-LS", especificacion=res_ac['tierra'], cantidad=long_ac * num_inv, unidad="m"))
-    # Protecciones AC
-    BOM.append(ItemBOM(item="Interruptor Termomagnético", especificacion=f"{res_ac['itm']}A", cantidad=num_inv, unidad="pza"))
-    # Canalización AC
-    for mat in res_ac['canalizacion']:
-        BOM.append(ItemBOM(item=mat['item'], especificacion=mat['especificacion'], cantidad=mat['cantidad'], unidad=mat['unidad']))
+    # B. Estructura
+    tipo_anclaje = proyecto_input.seleccion_componentes.tipo_anclaje
+    # Si el enum llega como objeto, lo convertimos a string, si es string lo usamos directo
+    if hasattr(tipo_anclaje, 'value'):
+        tipo_anclaje = tipo_anclaje.value
         
-    # 1.5 Interconexión
-    punto_conexion = proyecto_input.decision_interconexion.punto_conexion_elegido
-    # Mapeo del string del usuario al SKU del CSV
-    sku_interconexion = punto_conexion # Asumimos que coinciden, si no, hacer un map
-    BOM.append(ItemBOM(item="Paquete Interconexión", especificacion=sku_interconexion, cantidad=1, unidad="pza"))
-
-    # ------------------------------------------------
-    # 2. Cálculo de Costos
-    # ------------------------------------------------
+    factor_estructura = COSTOS_ESTRUCTURA_USD_PER_WATT.get(tipo_anclaje, 0.05)
+    total_estructura = potencia_watts * factor_estructura
     
-    costo_materiales = 0.0
-    for item in BOM:
-        # Construimos el SKU de búsqueda (A veces es directo la especificación, a veces item + espec)
-        # En precios_materiales.csv tenemos SKUs como "8 AWG", "32A", "2 pulgadas"
-        sku_busqueda = item.especificacion 
-        costo_materiales += item.cantidad * buscar_precio(sku_busqueda, item.item)
-
-    # Costo Mano de Obra (Simplificado según plantilla)
-    costo_mo = 0.0
-    costo_mo += cant_paneles * buscar_precio_mo("instalacion_panel")
-    costo_mo += (long_dc + long_ac) * buscar_precio_mo("instalacion_canalizacion_metro")
-    costo_mo += num_inv * buscar_precio_mo("instalacion_inversor")
-    costo_mo += buscar_precio_mo("gestion_permisos")
-
-    costo_directo = costo_materiales + costo_mo
-
-    # 3. Indirectos y Márgenes (Desde configuracion_global o constantes)
-    # Valores default si no carga el CSV
-    porc_contingencia = 0.05 
-    porc_utilidad = 0.20
-    costo_ingenieria = 15000.00 # Fijo ejemplo
+    # C. Trayectorias (BOS)
+    mts_dc = datos_calculados['ingenieria']['dc']['total_metros_cable']
+    # En AC, tomamos los metros de canalización sugerida
+    mts_ac = datos_calculados['ingenieria']['ac']['canalizacion_sugerida']['metros_totales']
     
-    # Intento de cargar de DB si existe
-    try:
-        porc_contingencia = float(db.config_global.loc['Contingencia_Porcentaje']['Valor'])
-        porc_utilidad = float(db.config_global.loc['Margen_Utilidad_Porcentaje']['Valor'])
-    except:
-        pass
-
-    contingencia = costo_directo * porc_contingencia
-    subtotal_1 = costo_directo + costo_ingenieria + contingencia
+    total_bos_dc = mts_dc * COSTO_METRO_LINEAL_DC
+    total_bos_ac = mts_ac * COSTO_METRO_LINEAL_AC
     
-    # Comision (ej. 3% del subtotal)
-    comision = subtotal_1 * 0.03 
-    subtotal_2 = subtotal_1 + comision
+    # D. Mano de Obra
+    mo_total = (num_paneles * MO_INSTALACION_PANEL_USD) + \
+               (num_inversores * MO_INSTALACION_INVERSOR_USD) + \
+               ((mts_dc + mts_ac) * 2.50) # MO tendido cable aprox
+               
+    # E. Costos Fijos (Escala)
+    costo_fijo = interpolar_costo_fijo(potencia_kw)
     
-    utilidad = subtotal_2 * porc_utilidad
-    capex_final = subtotal_2 + utilidad
+    # 4. Totales
+    costo_directo = total_paneles + total_inversores + total_estructura + total_bos_dc + total_bos_ac + mo_total
+    precio_venta = costo_directo + costo_fijo
+    usd_watt = precio_venta / potencia_watts if potencia_watts > 0 else 0
 
     return {
-        "BOM": BOM,
-        "Costos": ResumenCostos(
-            Costo_Materiales=round(costo_materiales, 2),
-            Costo_Mano_Obra=round(costo_mo, 2),
-            Costo_Directo_Total=round(costo_directo, 2),
-            Contingencia=round(contingencia, 2),
-            Comision=round(comision, 2),
-            Utilidad=round(utilidad, 2),
-            CAPEX_Final=round(capex_final, 2)
-        )
+        "desglose_costos": {
+            "1_modulos": {"cantidad": num_paneles, "total": total_paneles},
+            "2_inversores": {"cantidad": num_inversores, "total": total_inversores},
+            "3_estructura": {"tipo": tipo_anclaje, "total": total_estructura},
+            "4_bos": {"dc": total_bos_dc, "ac": total_bos_ac},
+            "5_mano_obra": {"total": mo_total},
+            "6_operativos": {"total": costo_fijo}
+        },
+        "resumen_financiero": {
+            "costo_directo_total": costo_directo,
+            "precio_venta_sugerido": precio_venta,
+            "indicador_usd_watt": usd_watt
+        }
     }

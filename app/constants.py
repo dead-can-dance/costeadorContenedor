@@ -37,3 +37,27 @@ TABLA_CONDUIT_IMC_40 = {
     2046: '3 pulgadas',
     3490: '4 pulgadas'
 }
+
+# Tabla: Costo Fijo Operativo por Potencia (Economía de Escala)
+# Formato: (Potencia_kW, Costo_Fijo_USD)
+TABLA_COSTOS_FIJOS_POTENCIA = [
+    (20, 1400.00),
+    (40, 2300.00),
+    (60, 3200.00),
+    (80, 4100.00),
+    (100, 5000.00)
+]
+
+# Costo de Estructura por Watt (Según tipo de anclaje)
+COSTOS_ESTRUCTURA_USD_PER_WATT = {
+    "coplanar": 0.03,      
+    "fix tilt": 0.05,
+    "groundmount": 0.08,
+    "carport": 0.12
+}
+
+# Costos Base Mano de Obra
+MO_INSTALACION_PANEL_USD = 15.00
+MO_INSTALACION_INVERSOR_USD = 250.00
+COSTO_METRO_LINEAL_DC = 3.50  # USD/m (Cable + Tubería/Charola)
+COSTO_METRO_LINEAL_AC = 15.00 # USD/m
